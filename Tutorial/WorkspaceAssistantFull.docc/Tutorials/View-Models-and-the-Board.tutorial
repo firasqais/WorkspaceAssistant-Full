@@ -1,0 +1,157 @@
+@Tutorial(time: 30, projectFiles: WorkspaceAssistantFull.zip) {
+    @Intro(title: "View Models and the Board") {
+        Give the board a view model that turns taps into commands, add the ready-made design system, and put the board on screen with four layouts that animate every change.
+
+        @Image(source: "wf-preview-layouts.png", alt: "The board as a grid, a list, focus and columns.")
+    }
+
+    @Section(title: "Build the Board's View Model") {
+        @ContentAndMedia {
+            `BoardViewModel` holds screen state (selection, sort order, which sheet is showing) and offers actions such as `togglePriority`. Every action ends in `store.perform(_:actor: .user)`, exactly where the assistant's tools will end.
+
+            @Image(source: "wf-diagram-layers.png", alt: "Views, view models, the domain store and services, stacked as layers.")
+        }
+
+        @Steps {
+            @Step {
+                Copy the **ViewModels/Board** folder from the download. These small types describe the board: collections, sort orders, the three Board columns, and requests such as "reveal this task". `BoardCollection` is a good example: one enum gives each collection its title, symbol, colour and filter.
+
+                @Code(name: "BoardCollection.swift", file: wf-04-collection.swift)
+            }
+
+            @Step {
+                Create `ViewModels/BoardViewModel.swift` with its state, queries and single-task actions. `highlightTrigger(for:)` returns the id of the assistant's latest change when it touched this task; the tile will pulse when that id changes. `perform(_:)` logs failures instead of crashing.
+
+                @Code(name: "BoardViewModel.swift", file: wf-04-boardvm-01.swift)
+            }
+
+            @Step {
+                Add multi-select. Prioritise and Complete act as toggles: if every selected task is already high priority, the same button removes priority.
+
+                @Code(name: "BoardViewModel.swift", file: wf-04-boardvm-02.swift)
+            }
+
+            @Step {
+                Add reordering. Drag-and-drop and `List.onMove` are translated into `moveTask` commands, so moving a tile is undoable like everything else. Dropping a task on a Board column becomes an `updateTask` with that column's changes.
+
+                @Code(name: "BoardViewModel.swift", file: wf-04-boardvm-03.swift)
+            }
+        }
+    }
+
+    @Section(title: "Add the Design System and Board Views") {
+        @ContentAndMedia {
+            The app's look lives in **Views/Shared**: spacing and corner tokens, the tile palette (with high-contrast variants), and reusable components such as tiles, token pills and action blocks. Copy these folders from the download: **Views/Shared**, **Views/Board**, **Views/TaskDetail**, **Views/Collections** and **Views/Search**. Then look at the two files that matter most for the agent.
+
+            @Image(source: "wf-preview-layouts.png", alt: "The board as a grid, a list, focus and columns.")
+        }
+
+        @Steps {
+            @Step {
+                Open `Views/Shared/Components/TaskTile.swift`. Each tile comes in three sizes. Find `phaseAnimator(_:trigger:)`: when `highlightTrigger` changes, the tile scales up with a coloured glow and its glyph bounces. That's how the user *sees* what the assistant just changed. It respects Reduce Motion, Increase Contrast and Dynamic Type.
+
+                @Code(name: "TaskTile.swift", file: wf-04-tile.swift) {
+                    @Image(source: "wf-preview-tiles.png", alt: "A large tile, a pulsing regular tile and two compact tiles.")
+                }
+            }
+
+            @Step {
+                Open `Views/Board/BoardView.swift`. It switches between the four layouts, cross-fades when the layout changes, animates whenever the task list changes, and plays a haptic when a task is completed. Opening a task zooms into its detail view.
+
+                @Code(name: "BoardView.swift", file: wf-04-boardview.swift) {
+                    @Image(source: "wf-preview-layouts.png", alt: "The board as a grid, a list, focus and columns.")
+                }
+            }
+        }
+    }
+
+    @Section(title: "Put the Board on Screen") {
+        @ContentAndMedia {
+            Create the view model in the composition root and show three tabs. The root view also hands the scene's `UndoManager` to the store; without that line, nothing could be undone.
+
+            @Image(source: "wf-preview-grid-noassistant.png", alt: "The Tasks tab showing six task tiles.")
+        }
+
+        @Steps {
+            @Step {
+                In `AppDependencies`, create the `BoardViewModel` and an `AppRouter` for the selected tab. Copy `ViewModels/AppRouter.swift` and `AppTab.swift` from the download. `undoActionName` gives the Edit menu names such as "Undo Prioritise".
+
+                @Code(name: "AppDependencies.swift", file: wf-04-deps-02.swift, previousFile: wf-03-deps-01.swift)
+            }
+
+            @Step {
+                Create `Views/Root/RootView.swift` with three tabs: Tasks, Collections and a Search tab with the search role. The last two lines connect the scene's undo manager to the store. The toolbar's Settings button doesn't open anything yet; its sheet arrives with the assistant.
+
+                @Code(name: "RootView.swift", file: wf-04-root-01.swift) {
+                    @Image(source: "wf-preview-grid-noassistant.png", alt: "The Tasks tab showing six task tiles.")
+                }
+            }
+
+            @Step {
+                Replace the app file. It owns `AppDependencies` in `@State` and injects the view model and router into the environment. In debug builds, the `-DesignGallery` launch argument shows every component instead. Run the app: tap, drag, switch layouts, then shake to undo.
+
+                @Code(name: "WorkspaceAssistantApp.swift", file: wf-04-app-01.swift) {
+                    @Image(source: "wf-preview-grid-noassistant.png", alt: "The Tasks tab showing six task tiles.")
+                }
+            }
+        }
+    }
+
+    @Assessments {
+        @MultipleChoice {
+            How does a tile know to pulse after the assistant changes its task?
+
+            @Choice(isCorrect: false) {
+                The tool calls an animation function on the tile.
+
+                @Justification(reaction: "Try again!") {
+                    Tools never touch views.
+                }
+            }
+
+            @Choice(isCorrect: true) {
+                The store records the change with a fresh id; the view model passes that id to the tile as its animation trigger.
+
+                @Justification(reaction: "That's right!") {
+                    `lastAssistantChange` → `highlightTrigger(for:)` → `phaseAnimator(trigger:)`. State flows down; nothing is called directly.
+                }
+            }
+
+            @Choice(isCorrect: false) {
+                SwiftUI animates every tile on every change.
+
+                @Justification(reaction: "Not quite.") {
+                    Only tiles whose id is in the latest assistant change get a trigger.
+                }
+            }
+        }
+
+        @MultipleChoice {
+            What happens if `RootView` never sets `board.store.undoManager`?
+
+            @Choice(isCorrect: true) {
+                Commands still work, but nothing can be undone.
+
+                @Justification(reaction: "Correct!") {
+                    `registerUndo` returns early when there's no undo manager.
+                }
+            }
+
+            @Choice(isCorrect: false) {
+                The app crashes on the first command.
+
+                @Justification(reaction: "Try again!") {
+                    The property is optional and checked with `guard`.
+                }
+            }
+
+            @Choice(isCorrect: false) {
+                Changes are no longer saved.
+
+                @Justification(reaction: "Not quite.") {
+                    Saving and undo are independent side effects.
+                }
+            }
+        }
+    }
+}

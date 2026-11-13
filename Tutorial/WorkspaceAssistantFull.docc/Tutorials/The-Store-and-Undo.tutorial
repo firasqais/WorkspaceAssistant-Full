@@ -1,0 +1,155 @@
+@Tutorial(time: 35, projectFiles: WorkspaceAssistantFull.zip) {
+    @Intro(title: "The Store and Undo") {
+        Build `WorkspaceStore`, the single source of truth. It applies commands, keeps tasks in order, saves through a protocol, records who changed what, and registers an undo for every change, including the assistant's.
+
+        @Image(source: "wf-diagram-undo.png", alt: "Commands paired with the inverse commands that undo them.")
+    }
+
+    @Section(title: "Define the Store's Boundaries") {
+        @ContentAndMedia {
+            The store depends on small protocols instead of concrete storage. The app plugs in SwiftData and UserDefaults; tests and previews plug in memory. The assistant's tools depend on a protocol too, so they never see the store's internals.
+
+            @Image(source: "wf-diagram-storage.png", alt: "WorkspaceStore talking to TaskRepository and PreferencesStore protocols, each with a real and an in-memory implementation.")
+        }
+
+        @Steps {
+            @Step {
+                In **Domain/Store**, create `WorkspaceCommandExecutor.swift`: everything a tool is allowed to do. Read tasks and preferences, perform a command, and resolve words to tasks. Nothing else.
+
+                @Code(name: "WorkspaceCommandExecutor.swift", file: wf-02-executor.swift)
+            }
+
+            @Step {
+                Create `TaskRepository.swift`: load, upsert and delete. The store never says "SwiftData".
+
+                @Code(name: "TaskRepository.swift", file: wf-02-repository.swift)
+            }
+
+            @Step {
+                Create `PreferencesStore.swift` for the layout, accent colour and list density, plus a flag that remembers whether the sample tasks were already added.
+
+                @Code(name: "PreferencesStore.swift", file: wf-02-preferences.swift)
+            }
+
+            @Step {
+                Create `InMemoryTaskRepository.swift`. Copy `InMemoryPreferencesStore.swift`, `Log.swift` (shared `Logger` categories) and `Array+Move.swift` (reordering for checklist steps) from the download.
+
+                @Code(name: "InMemoryTaskRepository.swift", file: wf-02-inmemory.swift)
+            }
+        }
+    }
+
+    @Section(title: "Build the Store") {
+        @ContentAndMedia {
+            `WorkspaceStore` is `@MainActor` and `@Observable`, so SwiftUI redraws whenever `tasks` or `preferences` change. Its properties are `private(set)`: the only way to change them is `perform(_:actor:)`.
+
+            @Image(source: "wf-diagram-honest.png", alt: "TaskMatcher turning the user's words into one task, none, or several.")
+        }
+
+        @Steps {
+            @Step {
+                Create `TaskMatcher.swift`. It turns words such as "the network refactor" into "Refactor Network Layer": by id, then exact title, then phrase, then every meaningful word. When several tasks match, it says so rather than guessing.
+
+                @Code(name: "TaskMatcher.swift", file: wf-02-matcher.swift)
+            }
+
+            @Step {
+                Create `WorkspaceStore.swift` with its state and initializer. On the very first launch it adds the sample tasks, and it remembers that it did, so deleting every task later doesn't bring them back.
+
+                @Code(name: "WorkspaceStore.swift", file: wf-02-store-01.swift)
+            }
+
+            @Step {
+                Add `perform(_:actor:)` and the `apply(_:)` switch, and conform to `WorkspaceCommandExecutor`. Each case returns an `Outcome`: the result, the **inverse** command that would undo it, and which tasks to save or delete. New tasks get a `sortIndex` below the current minimum, so they appear at the top.
+
+                @Code(name: "WorkspaceStore.swift", file: wf-02-store-02.swift)
+            }
+
+            @Step {
+                Add the helpers. `mutate` snapshots each task before changing it, reports only the tasks whose values really changed, and builds a `replaceTasks` inverse from the snapshots. `persist` sends upserts and deletes to the repository and saves preferences only when they changed.
+
+                @Code(name: "WorkspaceStore.swift", file: wf-02-store-03.swift)
+            }
+        }
+    }
+
+    @Section(title: "Record Activity and Undo Everything") {
+        @ContentAndMedia {
+            Because each command already knows its inverse, undo is one small function. The store registers the inverse with the scene's `UndoManager`; undoing performs it, which registers the redo. Shake to undo, or press ⌘Z, and it works for the assistant's changes too.
+
+            @Image(source: "wf-diagram-undo.png", alt: "Commands paired with the inverse commands that undo them.")
+        }
+
+        @Steps {
+            @Step {
+                Record an `ActivityEntry` for every command, and remember the assistant's latest change in `lastAssistantChange`. Its fresh `id` is what will make changed tiles pulse on the board.
+
+                @Code(name: "WorkspaceStore.swift", file: wf-02-store-04.swift)
+            }
+
+            @Step {
+                Add undo. `undoManager` is `weak` and set by the root view; `undoActionName` lets the app show "Undo Prioritise" in the Edit menu. `registerUndo` captures the inverse and performs it inside `MainActor.assumeIsolated`, because `UndoManager` calls back on the main thread.
+
+                @Code(name: "WorkspaceStore.swift", file: wf-02-store-05.swift)
+            }
+        }
+    }
+
+    @Assessments {
+        @MultipleChoice {
+            How does the store undo a change to a task's priority?
+
+            @Choice(isCorrect: false) {
+                It reloads the task from SwiftData.
+
+                @Justification(reaction: "Try again!") {
+                    Undo doesn't read from storage at all.
+                }
+            }
+
+            @Choice(isCorrect: true) {
+                `mutate` saved a snapshot before the change; undo performs `replaceTasks` with that snapshot.
+
+                @Justification(reaction: "That's right!") {
+                    Every command computes its inverse before it is applied, and undo is just another `perform`.
+                }
+            }
+
+            @Choice(isCorrect: false) {
+                It calls `setPriority` with the opposite value.
+
+                @Justification(reaction: "Not quite.") {
+                    For multi-task edits the opposite isn't well defined; restoring snapshots always is.
+                }
+            }
+        }
+
+        @MultipleChoice {
+            Why does `WorkspaceStore` depend on `TaskRepository` instead of SwiftData directly?
+
+            @Choice(isCorrect: true) {
+                Tests and previews can use the in-memory repository, and the store stays free of storage code.
+
+                @Justification(reaction: "Correct!") {
+                    The same store runs over SwiftData in the app and over a dictionary in tests.
+                }
+            }
+
+            @Choice(isCorrect: false) {
+                SwiftData can't be used from the main actor.
+
+                @Justification(reaction: "Try again!") {
+                    The SwiftData repository uses the container's main context.
+                }
+            }
+
+            @Choice(isCorrect: false) {
+                Protocols make the app faster.
+
+                @Justification(reaction: "Not quite.") {
+                    The benefit is substitution and testability, not speed.
+                }
+            }
+        }
+    }
+}

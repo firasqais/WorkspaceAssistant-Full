@@ -1,0 +1,36 @@
+@Tutorials(name: "WorkspaceAssistant Full") {
+    @Intro(title: "Architect an On-Device AI Agent") {
+        Build the complete Workspace Assistant: a task app whose on-device assistant changes your workspace through the same commands you use, with undo for everything, data saved with SwiftData, and tests that run without a model. These tutorials follow the app's core path; supporting views and the design system come ready-made in the project download.
+
+        @Image(source: "wf-hero.png", alt: "The task board next to the assistant changing it.")
+    }
+
+    @Chapter(name: "The Domain") {
+        Model tasks, describe every change as a command, and build the single store that applies commands, saves them and undoes them.
+
+        @Image(source: "wf-diagram-commands.png", alt: "A tap and an agent tool both become a WorkspaceCommand.")
+
+        @TutorialReference(tutorial: "doc:Modelling-the-Workspace")
+        @TutorialReference(tutorial: "doc:The-Store-and-Undo")
+        @TutorialReference(tutorial: "doc:Saving-with-SwiftData")
+    }
+
+    @Chapter(name: "The Interface") {
+        Give the board a view model, add the design system, and put four animated layouts on screen.
+
+        @Image(source: "wf-preview-layouts.png", alt: "The board as a grid, a list, focus and columns.")
+
+        @TutorialReference(tutorial: "doc:View-Models-and-the-Board")
+    }
+
+    @Chapter(name: "The Assistant") {
+        Turn the store into nine tools, run them with Apple Intelligence or a scripted stand-in, show every step in a chat, and test it all without a model.
+
+        @Image(source: "wf-preview-assistant-run.png", alt: "The assistant prioritising a task and switching to Focus.")
+
+        @TutorialReference(tutorial: "doc:Tools-and-the-Toolbox")
+        @TutorialReference(tutorial: "doc:The-Assistant-Engine")
+        @TutorialReference(tutorial: "doc:The-Assistant-Panel")
+        @TutorialReference(tutorial: "doc:Testing-Without-a-Model")
+    }
+}

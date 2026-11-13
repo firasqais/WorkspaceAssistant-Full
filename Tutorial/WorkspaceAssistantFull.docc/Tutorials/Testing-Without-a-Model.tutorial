@@ -1,0 +1,137 @@
+@Tutorial(time: 25, projectFiles: WorkspaceAssistantFull.zip) {
+    @Intro(title: "Testing Without a Model") {
+        Because every behaviour is a command, every tool is plain Swift, and every engine is a protocol, you can test the whole agent with no language model, no network and no device. Write Swift Testing tests for the store, the toolbox and the assistant's view model.
+
+        @Image(source: "wf-diagram-tests.png", alt: "Store tests, tool tests and view-model tests, each with its own fixture.")
+    }
+
+    @Section(title: "Test Commands and Undo") {
+        @ContentAndMedia {
+            If your project doesn't have a unit test target yet, add one with **File › New › Target… › Unit Testing Bundle**, choosing **Swift Testing**. The tests use `@testable import WorkspaceAssistant`.
+
+            @Image(source: "wf-diagram-undo.png", alt: "Commands paired with the inverse commands that undo them.")
+        }
+
+        @Steps {
+            @Step {
+                Create `StoreFixture.swift`. It builds a store over in-memory storage with a real `UndoManager`. Setting `groupsByEvent = false` and wrapping each command in its own undo group makes undo behave as it does for one tap, without a running app.
+
+                @Code(name: "StoreFixture.swift", file: wf-08-fixture.swift)
+            }
+
+            @Step {
+                Create `WorkspaceStoreTests.swift` and start with three tests: sample tasks are added only once, a new task goes to the top and undo and redo work, and a blank title is rejected. `#require` stops a test early when a value it depends on is missing.
+
+                @Code(name: "WorkspaceStoreTests.swift", file: wf-08-storetests-01.swift)
+            }
+
+            @Step {
+                Cover the rest of the commands. Every test follows the same shape: perform, check the state and what was saved, undo, check again.
+
+                @Code(name: "WorkspaceStoreTests.swift", file: wf-08-storetests-02.swift)
+            }
+        }
+    }
+
+    @Section(title: "Test the Tools Directly") {
+        @ContentAndMedia {
+            The toolbox returns a `ToolResult`, so you can check both halves of every tool call, the sentence the model would read and the activity the UI would show, without a model.
+
+            @Image(source: "wf-diagram-honest.png", alt: "TaskMatcher turning words into one task, none, or several.")
+        }
+
+        @Steps {
+            @Step {
+                Create `AgentFixture.swift` with `makeStore()` and a `collect(_:)` helper that gathers every event from an engine's stream.
+
+                @Code(name: "AgentFixture.swift", file: wf-08-agentfixture.swift)
+            }
+
+            @Step {
+                Create `WorkspaceToolboxTests.swift`. The important tests are the honest ones: an already-high task reports no change, an unknown task is a truthful `noMatch`, and an ambiguous query lists its candidates.
+
+                @Code(name: "WorkspaceToolboxTests.swift", file: wf-08-toolboxtests.swift)
+            }
+        }
+    }
+
+    @Section(title: "Test the View Model with a Fake Engine") {
+        @ContentAndMedia {
+            `AssistantViewModel` only knows the `AssistantEngine` protocol, so a fake engine lets a test decide exactly which events arrive, and when.
+
+            @Image(source: "wf-diagram-engines.png", alt: "The AssistantEngine protocol with Foundation Models, scripted and fake engines.")
+        }
+
+        @Steps {
+            @Step {
+                Create `FakeEngine.swift`. `emit(_:)` pushes an event and `finish(throwing:)` ends the stream. `settle()` lets queued main-actor work run before the test checks the result.
+
+                @Code(name: "FakeEngine.swift", file: wf-08-fake.swift)
+            }
+
+            @Step {
+                Create `AssistantViewModelTests.swift`. It checks streaming, a tool call that arrives late being placed before the reply, cancelling, errors becoming notices, and clearing that never touches tasks. Press **⌘U** to run all the tests in seconds.
+
+                @Code(name: "AssistantViewModelTests.swift", file: wf-08-avmtests.swift)
+            }
+        }
+    }
+
+    @Assessments {
+        @MultipleChoice {
+            How do these tests check the assistant's behaviour without Apple Intelligence?
+
+            @Choice(isCorrect: false) {
+                They record real model responses and replay them.
+
+                @Justification(reaction: "Try again!") {
+                    No model output is recorded or replayed.
+                }
+            }
+
+            @Choice(isCorrect: true) {
+                They call the toolbox directly and drive the view model with a fake engine.
+
+                @Justification(reaction: "That's right!") {
+                    The model only decides which tool to call; everything around that decision is plain, testable Swift.
+                }
+            }
+
+            @Choice(isCorrect: false) {
+                They run on a device with Apple Intelligence turned on.
+
+                @Justification(reaction: "Not quite.") {
+                    They run anywhere, including in continuous integration.
+                }
+            }
+        }
+
+        @MultipleChoice {
+            What's still worth testing by hand with the real model?
+
+            @Choice(isCorrect: true) {
+                Whether the model picks the right tools for real phrasings, which depends on your descriptions and instructions.
+
+                @Justification(reaction: "Correct!") {
+                    Unit tests prove the tools are correct; only the model can show whether it uses them well.
+                }
+            }
+
+            @Choice(isCorrect: false) {
+                Whether undo works.
+
+                @Justification(reaction: "Try again!") {
+                    The store tests cover undo for every command.
+                }
+            }
+
+            @Choice(isCorrect: false) {
+                Whether tasks are saved.
+
+                @Justification(reaction: "Not quite.") {
+                    The tests check the repository after each command.
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,161 @@
+@Tutorial(time: 30, projectFiles: WorkspaceAssistantFull.zip) {
+    @Intro(title: "The Assistant Engine") {
+        Hide the language model behind a protocol. The real engine keeps one long-lived Foundation Models session and streams events as it works; a scripted engine stands in when Apple Intelligence isn't available, and an automatic engine chooses between them on every prompt.
+
+        @Image(source: "wf-diagram-engines.png", alt: "The AssistantEngine protocol with Foundation Models, scripted and fake engines.")
+    }
+
+    @Section(title: "Define the Engine Contract") {
+        @ContentAndMedia {
+            The UI never talks to Foundation Models directly. It sends a prompt to an `AssistantEngine` and receives a stream of events: tool calls as they happen, the reply as it grows, and the final text. Any engine that produces those events will do, including a fake one in tests.
+
+            @Image(source: "wf-diagram-stream.png", alt: "A timeline of tool-called, partial-text and completed events.")
+        }
+
+        @Steps {
+            @Step {
+                Create `Domain/Models/AssistantEvent.swift`. `partialText` carries the reply so far (cumulative, not a delta), which is what Foundation Models' streaming snapshots provide. Copy `AssistantAvailability.swift` and `AssistantError.swift` from the download.
+
+                @Code(name: "AssistantEvent.swift", file: wf-06-event.swift)
+            }
+
+            @Step {
+                Create `Domain/Store/AssistantEngine.swift`. `simulationReason` is non-nil only for the stand-in, so the UI can always label it honestly. Cancelling the task that consumes the stream cancels generation.
+
+                @Code(name: "AssistantEngine.swift", file: wf-06-engine.swift)
+            }
+        }
+    }
+
+    @Section(title: "Talk to Apple Intelligence") {
+        @ContentAndMedia {
+            The real engine keeps **one** `LanguageModelSession` for the whole conversation, so the model remembers context: "now undo that" means something. It streams the reply with `streamResponse(to:)` while the tools report their activity through the recorder.
+
+            In **Domain/Services/Assistant**, add a **FoundationModels** folder.
+
+            @Image(source: "wf-diagram-stream.png", alt: "A timeline of tool-called, partial-text and completed events.")
+        }
+
+        @Steps {
+            @Step {
+                Create `AssistantInstructions.swift`. Short and specific works best on the on-device model: which tools exist, to pass the user's words as the query, to ask when a match is ambiguous, and never to claim something happened unless a tool said so.
+
+                @Code(name: "AssistantInstructions.swift", file: wf-06-instructions.swift)
+            }
+
+            @Step {
+                Create `AssistantErrorMapping.swift`. It maps Foundation Models errors and availability to the app's own `AssistantError` and `AssistantAvailability`, so each failure gets specific, friendly copy. It handles iOS 26's `GenerationError` and recognises iOS 27's error types by name.
+
+                @Code(name: "AssistantErrorMapping.swift", file: wf-06-errors.swift)
+            }
+
+            @Step {
+                Create `FoundationModelsEngine.swift` with the session and availability. The tools are built once, around a toolbox and a recorder. Availability also checks `supportsLocale()`, because the model may be ready but not for the user's language.
+
+                @Code(name: "FoundationModelsEngine.swift", file: wf-06-fme-01.swift)
+            }
+
+            @Step {
+                Add `send(_:)` and `respond(to:continuation:)`, and conform to `AssistantEngine`. `send` returns an `AsyncThrowingStream` whose termination cancels the work. While responding, the recorder yields `.toolCalled` events, and each streaming snapshot becomes `.partialText`. A second prompt while one is running is rejected as `.busy`.
+
+                @Code(name: "FoundationModelsEngine.swift", file: wf-06-fme-02.swift)
+            }
+        }
+    }
+
+    @Section(title: "Recover When the Context Fills Up") {
+        @ContentAndMedia {
+            The on-device model has a small context window. Rather than failing for good, the engine starts a new session and carries a short summary of the last exchanges in its instructions.
+
+            @Image(source: "wf-diagram-context.png", alt: "A long conversation exceeding the context window, replaced by a new session with a summary.")
+        }
+
+        @Steps {
+            @Step {
+                Remember the last four exchanges. When the model reports `contextWindowExceeded`, `restartWithSummary()` builds a new session whose instructions end with a summary of the last two. The user sees one friendly error and can simply ask again.
+
+                @Code(name: "FoundationModelsEngine.swift", file: wf-06-fme-03.swift)
+            }
+        }
+    }
+
+    @Section(title: "Keep Working Without Apple Intelligence") {
+        @ContentAndMedia {
+            On a simulator or a device without Apple Intelligence, a rule-based engine takes over. It runs the **same toolbox**, so the board changes exactly as it would with the model, and the UI labels it "Simulated" everywhere.
+
+            @Image(source: "wf-preview-simulated.png", alt: "The assistant sheet with a Simulated assistant banner.")
+        }
+
+        @Steps {
+            @Step {
+                Copy the **Scripted** folder from the download: `ScriptedIntent.swift`, `ScriptedIntentParser.swift` and this file. The parser turns phrases like "prioritise all testing tasks and use List view" into intents; `ScriptedEngine` runs them through the toolbox and streams a short, truthful reply word by word.
+
+                @Code(name: "ScriptedEngine.swift", file: wf-06-scripted.swift)
+            }
+
+            @Step {
+                Create `AutomaticAssistantEngine.swift`. It checks availability on **every** prompt, so the real model takes over as soon as it finishes downloading, without restarting the app.
+
+                @Code(name: "AutomaticAssistantEngine.swift", file: wf-06-automatic.swift)
+            }
+        }
+    }
+
+    @Assessments {
+        @MultipleChoice {
+            Why does the engine keep one long-lived `LanguageModelSession` instead of creating one per prompt?
+
+            @Choice(isCorrect: true) {
+                The session holds the conversation, so follow-ups like "now undo that" make sense.
+
+                @Justification(reaction: "That's right!") {
+                    A new session per prompt would forget everything said before.
+                }
+            }
+
+            @Choice(isCorrect: false) {
+                Creating a session is slow, so it must only happen once per launch.
+
+                @Justification(reaction: "Try again!") {
+                    The engine does create new sessions, on reset and when the context fills up.
+                }
+            }
+
+            @Choice(isCorrect: false) {
+                Tools can only be registered once.
+
+                @Justification(reaction: "Not quite.") {
+                    The same tools are passed to every new session.
+                }
+            }
+        }
+
+        @MultipleChoice {
+            What makes the simulated assistant change the board exactly like the real one?
+
+            @Choice(isCorrect: false) {
+                It sends prompts to a cloud model.
+
+                @Justification(reaction: "Try again!") {
+                    Nothing leaves the device; it's rule-based.
+                }
+            }
+
+            @Choice(isCorrect: true) {
+                It calls the same `WorkspaceToolbox`, which performs the same commands.
+
+                @Justification(reaction: "Correct!") {
+                    Only the understanding differs; the actions and their reports are shared.
+                }
+            }
+
+            @Choice(isCorrect: false) {
+                It replays recorded responses.
+
+                @Justification(reaction: "Not quite.") {
+                    It parses the prompt and runs real tool calls on the current board.
+                }
+            }
+        }
+    }
+}

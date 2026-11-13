@@ -1,0 +1,115 @@
+@Tutorial(time: 25, projectFiles: WorkspaceAssistantFull.zip) {
+    @Intro(title: "The Assistant Panel") {
+        Turn the engine's event stream into a conversation: user messages, action blocks for every tool call, and a reply that streams in. Then connect the assistant to the app, with a pill above the tab bar that opens it over the live board.
+
+        @Image(source: "wf-preview-assistant-run.png", alt: "The assistant prioritising a task and switching to Focus.")
+    }
+
+    @Section(title: "Model the Conversation") {
+        @ContentAndMedia {
+            `AssistantViewModel` consumes events and keeps an ordered transcript. Tool calls that arrive while the reply is streaming are inserted **before** the reply, so the chat always reads "what I did, then what I say".
+
+            @Image(source: "wf-diagram-stream.png", alt: "A timeline of tool-called, partial-text and completed events.")
+        }
+
+        @Steps {
+            @Step {
+                Copy the **ViewModels/Assistant** folder from the download. `TranscriptItem` is the core of it: a user message, an assistant reply (still streaming or not), an action, or a notice such as an error.
+
+                @Code(name: "TranscriptItem.swift", file: wf-07-transcript.swift)
+            }
+
+            @Step {
+                Create `ViewModels/AssistantViewModel.swift`. `send()` appends the user's message, starts the engine's stream and handles each event. Errors become friendly notices in the transcript instead of alerts.
+
+                @Code(name: "AssistantViewModel.swift", file: wf-07-avm-01.swift)
+            }
+
+            @Step {
+                Add `cancel()` and `clear()`. Stopping marks the transcript "Stopped". Clearing resets the engine's session but **never** touches tasks or layout: forgetting the conversation isn't undoing the work.
+
+                @Code(name: "AssistantViewModel.swift", file: wf-07-avm-02.swift)
+            }
+        }
+    }
+
+    @Section(title: "Show What the Agent Did") {
+        @ContentAndMedia {
+            Copy **Views/Assistant**, **ViewModels/Settings**, **Views/Settings** and `Views/Root/AppCommands.swift` from the download. The panel, transcript, composer and suggestion tiles are standard SwiftUI; one view deserves a closer look.
+
+            @Image(source: "wf-preview-assistant-undo.png", alt: "An action block with an Undo button and a failed action explaining why.")
+        }
+
+        @Steps {
+            @Step {
+                Open `TranscriptRow.swift`. Each tool call becomes an `ActionBlock`, a Shortcuts-style card with a verb and token pills. A failed action shows why. The latest successful delete gets an **Undo** button wired to the scene's undo manager, and tapping a block reveals that task on the board.
+
+                @Code(name: "TranscriptRow.swift", file: wf-07-row.swift) {
+                    @Image(source: "wf-preview-assistant-undo.png", alt: "An action block with an Undo button and a failed action explaining why.")
+                }
+            }
+        }
+    }
+
+    @Section(title: "Connect Everything") {
+        @ContentAndMedia {
+            Three edits finish the app: create the engine, show the assistant from the tab bar, and add keyboard shortcuts.
+
+            @Image(source: "wf-preview-grid.png", alt: "The Tasks tab with the Ask Assistant pill above the tab bar.")
+        }
+
+        @Steps {
+            @Step {
+                In `AppDependencies`, create the engine. UI tests get the scripted engine with no delay; the app gets `AutomaticAssistantEngine`. Both are wrapped in an `AssistantViewModel`.
+
+                @Code(name: "AppDependencies.swift", file: wf-07-deps-03.swift, previousFile: wf-04-deps-02.swift)
+            }
+
+            @Step {
+                In `RootView`, add the **Ask Assistant…** pill with `tabViewBottomAccessory` and present the assistant in a sheet. `presentationBackgroundInteraction(.enabled(upThrough: .medium))` keeps the board usable behind a half-height sheet, so you watch the agent work. Tapping an action block lowers the sheet and scrolls to the task. The Settings sheet now shows which assistant is active.
+
+                @Code(name: "RootView.swift", file: wf-07-root-02.swift, previousFile: wf-04-root-01.swift) {
+                    @Image(source: "wf-preview-assistant-empty.png", alt: "The assistant sheet with suggestion tiles over the board.")
+                }
+            }
+
+            @Step {
+                In the app file, inject the assistant and add `AppCommands`, keyboard shortcuts for a hardware keyboard: ⌘N for a new task, ⌘F to search, ⌘K to ask the assistant, and ⌘1 to ⌘4 for the layouts. Run the app and tap **Prioritise the network refactor and switch to Focus**.
+
+                @Code(name: "WorkspaceAssistantApp.swift", file: wf-07-app-02.swift, previousFile: wf-04-app-01.swift) {
+                    @Image(source: "wf-preview-assistant-run.png", alt: "The assistant prioritising a task and switching to Focus.")
+                }
+            }
+        }
+    }
+
+    @Assessments {
+        @MultipleChoice {
+            The user taps **Clear Conversation**. What happens to the tasks the assistant changed?
+
+            @Choice(isCorrect: true) {
+                Nothing. Only the transcript and the session are reset.
+
+                @Justification(reaction: "That's right!") {
+                    Changes are undone with undo, not by forgetting the conversation.
+                }
+            }
+
+            @Choice(isCorrect: false) {
+                They are restored to how they were before the conversation.
+
+                @Justification(reaction: "Try again!") {
+                    That would be a surprising side effect of clearing a chat.
+                }
+            }
+
+            @Choice(isCorrect: false) {
+                They are deleted.
+
+                @Justification(reaction: "Not quite.") {
+                    `clear()` never performs a command.
+                }
+            }
+        }
+    }
+}

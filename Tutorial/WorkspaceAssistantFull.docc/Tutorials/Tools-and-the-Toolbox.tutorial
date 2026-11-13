@@ -1,0 +1,155 @@
+@Tutorial(time: 30, projectFiles: WorkspaceAssistantFull.zip) {
+    @Intro(title: "Tools and the Toolbox") {
+        Give the assistant hands. A toolbox resolves the model's words to tasks, performs commands as the assistant, and reports exactly what happened. Nine thin tools expose it to Foundation Models.
+
+        @Image(source: "wf-diagram-toolbox.png", alt: "A tool calling the toolbox, which performs a command and returns a message for the model and an activity for the UI.")
+    }
+
+    @Section(title: "Describe What a Tool Did") {
+        @ContentAndMedia {
+            Every tool call produces two things: a **sentence for the model**, and a **structured activity for the UI**. The sentence keeps the model honest; the activity becomes an action block in the chat and an announcement for VoiceOver.
+
+            @Image(source: "wf-diagram-toolbox.png", alt: "A tool calling the toolbox, which returns a message and an activity.")
+        }
+
+        @Steps {
+            @Step {
+                Create `Domain/Models/ToolActivity.swift`. Parameters are typed (`.task`, `.layout`, `.priority`…), so the UI can draw them as token pills and localise them. Outcomes are `success`, `unchanged` or a specific `failure` such as `noMatch` or `ambiguous`.
+
+                @Code(name: "ToolActivity.swift", file: wf-05-activity.swift)
+            }
+
+            @Step {
+                In **Domain/Services/Assistant/Toolbox**, create `ToolResult.swift` to pair the two.
+
+                @Code(name: "ToolResult.swift", file: wf-05-result.swift)
+            }
+        }
+    }
+
+    @Section(title: "Build the Toolbox") {
+        @ContentAndMedia {
+            The toolbox is shared by the real tools and the scripted assistant, so both behave identically. It talks to the store only through `WorkspaceCommandExecutor`, and always as `.assistant`.
+
+            @Image(source: "wf-diagram-honest.png", alt: "TaskMatcher turning words into one task, none, or several, with an honest result for each.")
+        }
+
+        @Steps {
+            @Step {
+                Create `WorkspaceToolbox.swift` with `findTasks`. It returns titles **and ids**, so the model can refer to a task precisely in a follow-up call. When nothing matches, the message lists the open tasks, so the model can recover.
+
+                @Code(name: "WorkspaceToolbox.swift", file: wf-05-toolbox-01.swift)
+            }
+
+            @Step {
+                Add `addTask`. An empty title is reported as a plain instruction to the model: "Ask the user what the task should be called."
+
+                @Code(name: "WorkspaceToolbox.swift", file: wf-05-toolbox-02.swift)
+            }
+
+            @Step {
+                Add `withUniqueTask`, the heart of honest tools. It acts only when the words match **exactly one** task. For none or several it changes nothing and says so, listing the candidates. Then add priority, complete and delete on top of it. Each checks first and reports "No change made" rather than pretending.
+
+                @Code(name: "WorkspaceToolbox.swift", file: wf-05-toolbox-03.swift)
+            }
+
+            @Step {
+                Add the remaining operations: layout, accent colour, tile colour (keeping the glyph) and checklist steps.
+
+                @Code(name: "WorkspaceToolbox.swift", file: wf-05-toolbox-04.swift)
+            }
+        }
+    }
+
+    @Section(title: "Wrap the Toolbox as Tools") {
+        @ContentAndMedia {
+            Now the Foundation Models part. Each tool has a name, a description the model reads, `@Generable` arguments it must fill in, and a `call` that runs the toolbox.
+
+            @Image(source: "wf-diagram-toolbox.png", alt: "A tool calling the toolbox.")
+        }
+
+        @Steps {
+            @Step {
+                In **Domain/Services/Assistant/Tools**, create `GenerableArguments.swift`. These `@Generable` enums mirror domain enums, so the model can only choose valid values. `.domain` converts back.
+
+                @Code(name: "GenerableArguments.swift", file: wf-05-arguments.swift)
+            }
+
+            @Step {
+                Create `ToolActivityRecorder.swift`. Tools run inside the model's response; the recorder forwards each activity to whichever response stream is current, so the chat can show it immediately.
+
+                @Code(name: "ToolActivityRecorder.swift", file: wf-05-recorder.swift)
+            }
+
+            @Step {
+                Create `WorkspaceTools.swift` with `make(toolbox:recorder:)`, the shared `run` helper and the first two tools. `run` hops to the main actor, performs the operation, records the activity and returns the message.
+
+                @Code(name: "WorkspaceTools.swift", file: wf-05-tools-01.swift)
+            }
+
+            @Step {
+                Add the other seven tools. Each is a few lines. Note `DeleteTaskTool`'s description: "Only use when the user explicitly asks". Descriptions are where you set the model's boundaries.
+
+                @Code(name: "WorkspaceTools.swift", file: wf-05-tools-02.swift)
+            }
+        }
+    }
+
+    @Assessments {
+        @MultipleChoice {
+            The user says "prioritise the test task" and two task titles contain "Test". What does `setTaskPriority` do?
+
+            @Choice(isCorrect: false) {
+                Prioritises the first one.
+
+                @Justification(reaction: "Try again!") {
+                    Guessing would make the assistant change the wrong task.
+                }
+            }
+
+            @Choice(isCorrect: true) {
+                Changes nothing and tells the model which tasks matched, so it can ask the user.
+
+                @Justification(reaction: "That's right!") {
+                    `withUniqueTask` only acts on exactly one match.
+                }
+            }
+
+            @Choice(isCorrect: false) {
+                Prioritises both.
+
+                @Justification(reaction: "Not quite.") {
+                    The tool acts on one task; the scripted assistant has a separate intent for whole categories.
+                }
+            }
+        }
+
+        @MultipleChoice {
+            Why is the toolbox separate from the `Tool` structs?
+
+            @Choice(isCorrect: true) {
+                So the scripted assistant and the tests can run exactly the same logic without a language model.
+
+                @Justification(reaction: "Correct!") {
+                    The tools are thin adapters; the toolbox is plain Swift you can call directly.
+                }
+            }
+
+            @Choice(isCorrect: false) {
+                Because `Tool` structs can't call the store.
+
+                @Justification(reaction: "Try again!") {
+                    They could; the split is about reuse and testing.
+                }
+            }
+
+            @Choice(isCorrect: false) {
+                The model reads the toolbox's code.
+
+                @Justification(reaction: "Not quite.") {
+                    The model only sees names, descriptions, arguments and returned messages.
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,155 @@
+@Tutorial(time: 20, projectFiles: WorkspaceAssistantFull.zip) {
+    @Intro(title: "Modelling the Workspace") {
+        Start with plain Swift values: tasks, their categories and steps, and a single enum that lists every change the app can make. Nothing here imports SwiftUI, SwiftData or FoundationModels, which is what makes the rest easy to test.
+
+        @Image(source: "wf-diagram-layers.png", alt: "Views, view models, the domain store and services, stacked as layers.")
+    }
+
+    @Section(title: "Describe a Task") {
+        @ContentAndMedia {
+            Create a new iOS App project named **WorkspaceAssistant** in Xcode 27, with SwiftUI and iOS 26 as the deployment target. Set **Swift Language Version** to Swift 6 and **Strict Concurrency Checking** to Complete. Add the folders **Domain/Models**, **Domain/Store** and **Domain/Services**.
+
+            Every model is a value type that is `Hashable`, `Codable` and `Sendable`, so it can cross actors, be compared and be saved.
+
+            @Image(source: "wf-diagram-taskitem.png", alt: "A task tile next to the TaskItem properties it is drawn from.")
+        }
+
+        @Steps {
+            @Step {
+                Create `TaskPriority.swift`. Priority is an enum rather than a `Bool`, so more levels can be added later without changing every call site.
+
+                Add `TaskStatus`, `TaskOrigin`, `BoardLayout`, `AccentTheme` and `ListDensity` the same way: each is a short `String` enum. Copy them from the **Domain/Models** folder of the project download.
+
+                @Code(name: "TaskPriority.swift", file: wf-01-priority.swift)
+            }
+
+            @Step {
+                Create `TaskCategory.swift`. Each category supplies a default colour and SF Symbol, so a task only stores an appearance when the user customises it. Copy `TileColor.swift`, the twelve tile colours, from the download.
+
+                @Code(name: "TaskCategory.swift", file: wf-01-category.swift)
+            }
+
+            @Step {
+                Create `TileAppearance.swift`: a colour and a glyph, like a Shortcut's icon.
+
+                @Code(name: "TileAppearance.swift", file: wf-01-appearance.swift)
+            }
+
+            @Step {
+                Create `TaskStep.swift` for a task's optional checklist.
+
+                @Code(name: "TaskStep.swift", file: wf-01-step.swift)
+            }
+
+            @Step {
+                Create `TaskItem.swift` with the stored properties. `appearance` is optional (`nil` means "use the category default"), and `sortIndex` is a `Double`, so a task can be moved between two others by averaging their indexes without renumbering the rest.
+
+                @Code(name: "TaskItem.swift", file: wf-01-taskitem-01.swift)
+            }
+
+            @Step {
+                Add computed helpers. Views and tools ask questions like `isDone` and `stepProgress` instead of repeating the logic.
+
+                @Code(name: "TaskItem.swift", file: wf-01-taskitem-02.swift)
+            }
+
+            @Step {
+                Create `SampleData.swift`: the six tasks every new install starts with.
+
+                @Code(name: "SampleData.swift", file: wf-01-sample.swift)
+            }
+        }
+    }
+
+    @Section(title: "Describe Every Change as a Command") {
+        @ContentAndMedia {
+            This is the idea the whole app is built on: **every change goes through one place, as a command.** A tap on ★ and an assistant tool both produce the same `WorkspaceCommand`. That gives you undo for everything, an assistant that can never do more than the user, and behaviour you can test one command at a time.
+
+            @Image(source: "wf-diagram-commands.png", alt: "A tap and an agent tool both become a WorkspaceCommand that updates, saves and registers undo.")
+        }
+
+        @Steps {
+            @Step {
+                Create `WorkspaceCommand.swift`. Read the cases as the app's full list of capabilities. A few exist mainly to undo others: `insertTasks` reverses a delete, and `replaceTasks` restores snapshots after an edit.
+
+                @Code(name: "WorkspaceCommand.swift", file: wf-01-command.swift)
+            }
+
+            @Step {
+                Create `TaskChanges.swift`, a partial update where `nil` means "leave this field alone".
+
+                @Code(name: "TaskChanges.swift", file: wf-01-changes.swift)
+            }
+
+            @Step {
+                Create `CommandResult.swift`. It separates the tasks a command *targeted* from the tasks that *actually changed*. The assistant needs that difference to report "already high priority, nothing changed" truthfully.
+
+                @Code(name: "CommandResult.swift", file: wf-01-result.swift)
+            }
+
+            @Step {
+                Create `WorkspaceError.swift` for commands the store rejects. Then copy the remaining model files from the download: `CommandActor`, `WorkspacePreferences`, `ActivityEntry`, `AssistantChange` and `TaskMatch`. You'll meet each of them in the next tutorial.
+
+                @Code(name: "WorkspaceError.swift", file: wf-01-error.swift)
+            }
+        }
+    }
+
+    @Assessments {
+        @MultipleChoice {
+            Why does `WorkspaceCommand` include `insertTasks` and `replaceTasks`, which the user never chooses directly?
+
+            @Choice(isCorrect: true) {
+                They are the inverses of other commands, so undo can be expressed as just another command.
+
+                @Justification(reaction: "That's right!") {
+                    Undoing a delete is an `insertTasks`; undoing an edit is a `replaceTasks` with the previous snapshots.
+                }
+            }
+
+            @Choice(isCorrect: false) {
+                SwiftData requires them.
+
+                @Justification(reaction: "Try again!") {
+                    The model layer doesn't know about SwiftData at all.
+                }
+            }
+
+            @Choice(isCorrect: false) {
+                They are only used by the assistant.
+
+                @Justification(reaction: "Not quite.") {
+                    Neither is exposed as a tool; they exist for undo and for the new-task sheet.
+                }
+            }
+        }
+
+        @MultipleChoice {
+            What does `CommandResult` let the assistant say that a plain "success" flag couldn't?
+
+            @Choice(isCorrect: false) {
+                How long the command took.
+
+                @Justification(reaction: "Try again!") {
+                    Timing isn't recorded.
+                }
+            }
+
+            @Choice(isCorrect: true) {
+                Which tasks really changed, so it can say "nothing needed changing" instead of claiming success.
+
+                @Justification(reaction: "Correct!") {
+                    `affectedTaskIDs` and `changedTaskIDs` can differ, and the difference is exactly what an honest reply needs.
+                }
+            }
+
+            @Choice(isCorrect: false) {
+                Whether the user approved the change.
+
+                @Justification(reaction: "Not quite.") {
+                    There is no approval step in this app; undo plays that role.
+                }
+            }
+        }
+    }
+}

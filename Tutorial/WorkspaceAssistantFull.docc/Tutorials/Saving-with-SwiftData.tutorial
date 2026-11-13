@@ -1,0 +1,117 @@
+@Tutorial(time: 20, projectFiles: WorkspaceAssistantFull.zip) {
+    @Intro(title: "Saving with SwiftData") {
+        Implement the store's storage protocols. Tasks are saved with SwiftData through a storage model that mirrors `TaskItem`; preferences go to `UserDefaults`. Then create the composition root that decides which implementations the app uses.
+
+        @Image(source: "wf-diagram-record.png", alt: "TaskItem fields mapped to TaskRecord fields.")
+    }
+
+    @Section(title: "Map Tasks to SwiftData") {
+        @ContentAndMedia {
+            Keep `TaskItem` a plain struct and add a separate `@Model` class for storage. The domain never depends on SwiftData, and the storage format can change without touching the rest of the app.
+
+            In **Domain/Services**, add a **Persistence** folder.
+
+            @Image(source: "wf-diagram-record.png", alt: "TaskItem fields mapped to TaskRecord fields.")
+        }
+
+        @Steps {
+            @Step {
+                Create `TaskRecord.swift`. Every property has a default and there are no unique constraints, so the schema could later sync through CloudKit. Enums are stored as raw strings and steps as JSON. `update(from:)` copies every field from a `TaskItem`.
+
+                @Code(name: "TaskRecord.swift", file: wf-03-record-01.swift)
+            }
+
+            @Step {
+                Add `taskItem`, the conversion back. Unknown raw values fall back to defaults, so a value written by a newer version of the app can't crash this one.
+
+                @Code(name: "TaskRecord.swift", file: wf-03-record-02.swift)
+            }
+        }
+    }
+
+    @Section(title: "Implement the Repository") {
+        @ContentAndMedia {
+            `SwiftDataTaskRepository` owns a `ModelContainer` and works on its main context, which matches the store's `@MainActor` isolation.
+
+            @Image(source: "wf-diagram-storage.png", alt: "WorkspaceStore talking to TaskRepository and PreferencesStore protocols.")
+        }
+
+        @Steps {
+            @Step {
+                Create `SwiftDataTaskRepository.swift` with the container and `fetchAll()`. Passing `inMemory: true` gives tests a throwaway store with the same code path.
+
+                @Code(name: "SwiftDataTaskRepository.swift", file: wf-03-swiftdata-01.swift)
+            }
+
+            @Step {
+                Add `upsert(_:)`. It fetches the existing records for the given ids with one `#Predicate`, updates those it finds and inserts the rest, then saves once.
+
+                @Code(name: "SwiftDataTaskRepository.swift", file: wf-03-swiftdata-02.swift)
+            }
+
+            @Step {
+                Add `delete(ids:)`, a batch delete with a predicate.
+
+                @Code(name: "SwiftDataTaskRepository.swift", file: wf-03-swiftdata-03.swift)
+            }
+        }
+    }
+
+    @Section(title: "Preferences and the Composition Root") {
+        @ContentAndMedia {
+            One object decides which implementations to use, once per launch. Everything else receives its dependencies instead of creating them.
+
+            @Image(source: "wf-diagram-composition.png", alt: "AppDependencies building the repository, store, engine and view models.")
+        }
+
+        @Steps {
+            @Step {
+                Create `UserDefaultsPreferencesStore.swift`, the same storage `@AppStorage` uses.
+
+                @Code(name: "UserDefaultsPreferencesStore.swift", file: wf-03-defaults.swift)
+            }
+
+            @Step {
+                At the top level of the app folder, create `LaunchConfiguration.swift`. Launch arguments such as `-UITestScriptedAssistant` switch to in-memory storage and the scripted assistant, so UI tests are repeatable. The switches only work in debug builds.
+
+                @Code(name: "LaunchConfiguration.swift", file: wf-03-launch.swift)
+            }
+
+            @Step {
+                Create `AppDependencies.swift`. It picks SwiftData or memory, falls back to memory if the SwiftData store can't open, and builds the store. You'll add the view models and the assistant here in later tutorials.
+
+                @Code(name: "AppDependencies.swift", file: wf-03-deps-01.swift)
+            }
+        }
+    }
+
+    @Assessments {
+        @MultipleChoice {
+            Why does `TaskRecord` store `category` as a raw `String` rather than the `TaskCategory` enum?
+
+            @Choice(isCorrect: true) {
+                It keeps the stored format simple and lets unknown values fall back safely when reading.
+
+                @Justification(reaction: "That's right!") {
+                    `TaskCategory(rawValue:) ?? .development` can't crash on a value it doesn't recognise.
+                }
+            }
+
+            @Choice(isCorrect: false) {
+                SwiftData can't store strings and enums in the same model.
+
+                @Justification(reaction: "Try again!") {
+                    It can; this is a design choice, not a limitation.
+                }
+            }
+
+            @Choice(isCorrect: false) {
+                It makes the store faster to search.
+
+                @Justification(reaction: "Not quite.") {
+                    The app never searches by category in the database.
+                }
+            }
+        }
+    }
+}
