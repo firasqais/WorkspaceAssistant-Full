@@ -2,6 +2,8 @@
     @Intro(title: "Modelling the Workspace") {
         Start with plain Swift values: tasks, their categories and steps, and a single enum that lists every change the app can make. Nothing here imports SwiftUI, SwiftData or FoundationModels, which is what makes the rest easy to test.
 
+        Meet a keyword you don't know? Look it up in the <doc:Swift-Code-Guide>.
+
         @Image(source: "wf-diagram-layers.png", alt: "Views, view models, the domain store and services, stacked as layers.")
     }
 

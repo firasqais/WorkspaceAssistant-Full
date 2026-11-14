@@ -2,6 +2,8 @@
     @Intro(title: "Architect an On-Device AI Agent") {
         Build the complete Workspace Assistant: a task app whose on-device assistant changes your workspace through the same commands you use, with undo for everything, data saved with SwiftData, and tests that run without a model. These tutorials follow the app's core path; supporting views and the design system come ready-made in the project download.
 
+        New to some of the Swift? Keep the <doc:Swift-Code-Guide> open as you go: it explains every keyword and attribute these tutorials use, such as `@Observable`, `private(set)`, `@MainActor` and `@Generable`.
+
         @Image(source: "wf-hero.png", alt: "The task board next to the assistant changing it.")
     }
 
